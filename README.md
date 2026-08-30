@@ -2,6 +2,10 @@
 
 本机运行的微信支付小票机打印工具：网页负责编辑和预览票面，本地 Node.js 服务负责调用打印接口、Telegram 和图床。服务默认只监听 `127.0.0.1`，不对局域网暴露。
 
+## 界面预览
+
+![WeChat Printer 小票编辑页面](docs/screenshot.jpg)
+
 ## 功能
 
 - 文本打印：文字、放大文字、空行、图片、二维码、表格。
@@ -23,7 +27,15 @@
 
 ## 快速开始
 
+先克隆本仓库并进入项目目录：
+
+```bash
+git clone https://github.com/lemonno2333/WeChat-Printer.git
+cd WeChat-Printer
+```
+
 **macOS**：双击 `start-local.command`，或：
+
 ```bash
 node start-local.js
 ```
@@ -153,6 +165,10 @@ node --check start-local.js
 ├── start-local.command
 └── start-local.bat
 ```
+
+## 延伸阅读
+
+如果想了解小票机更详细的打印能力范围，可以移步至[微信小票机 P4 的不完全折腾笔记](https://lemonno.xyz/archives/P4.html)。
 
 ## 许可证
 
