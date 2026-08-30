@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f3f6fb" />
+    <title>小票机打印台</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%232161da'/%3E%3Cpath d='M18 25h28v20H18zM23 18h18v9H23zM23 39h18' fill='none' stroke='white' stroke-width='4' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Roboto+Condensed:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <div class="brand-mark"><i data-lucide="printer"></i></div>
+          <div><p class="eyebrow">WECHAT SMART PRINTER</p><h1>小票机打印台</h1></div>
+        </div>
+        <nav class="topnav" aria-label="功能导航">
+          <button class="topnav-link active" id="textPrintNav" type="button" data-view="textView" aria-label="文本打印"><i data-lucide="file-text"></i><span>文本打印</span></button>
+          <button class="topnav-link" id="messageListenNav" type="button" data-view="messageView" aria-label="消息监听"><i data-lucide="radio"></i><span>消息监听</span><span class="nav-status-dot" id="navTelegramDot"></span></button>
+          <button class="topnav-link" id="developerModeNav" type="button" data-view="textView" data-mode="developer" aria-label="开发者模式"><i data-lucide="braces"></i><span>开发者模式</span></button>
+          <button class="topnav-link" id="settingsNav" type="button" data-view="settingsView" aria-label="设置"><i data-lucide="settings"></i><span>设置</span></button>
+        </nav>
+        <div class="topbar-meta"><span class="connection-dot"></span><span>本地服务</span><span class="meta-divider"></span><span id="topbarStatus">准备打印</span></div>
+      </header>
+
+      <main class="workspace">
+        <section class="page-view" id="textView">
+        <section class="intro-row">
+          <div>
+            <p class="section-kicker">RECEIPT COMPOSER</p>
+            <h2>把想打印的内容，<em>排成一张小票。</em></h2>
+            <p class="intro-copy">填写设备信息和票面内容，右侧会同步生成预览与请求 JSON。</p>
+          </div>
+          <div class="status-chip"><span class="status-pulse"></span><span id="statusText">准备打印</span></div>
+        </section>
+
+        <div class="editor-grid">
+          <section class="panel form-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-index">01 / DEVICE</p>
+                <h3>设备与接口</h3>
+              </div>
+              <i data-lucide="settings-2" class="panel-icon"></i>
+            </div>
+
+            <div class="field-group">
+              <label for="deviceSn">设备 SN <span class="required">必填</span></label>
+              <input id="deviceSn" type="text" placeholder="例如：SN202408220001" autocomplete="off" />
+              <p class="field-help">填写小票机背面或管理后台中的设备编号。</p>
+            </div>
+
+            <div class="field-group">
+              <label for="sid">设备 SID <span class="required">必填</span></label>
+              <input id="sid" type="text" placeholder="例如：wx-smart-device-sid" autocomplete="off" />
+              <p class="field-help">图片链接中的 sid 参数需要和这里保持一致。</p>
+            </div>
+
+            <div class="field-group">
+              <label for="accountType">account_type <span class="required">必填</span></label>
+              <input id="accountType" type="text" inputmode="numeric" placeholder="例如：2" autocomplete="off" required />
+            </div>
+
+            <div class="device-save-row">
+              <select id="savedDevice" aria-label="选择已保存设备">
+                <option value="">选择已保存设备</option>
+              </select>
+              <button class="icon-button" id="deleteDevice" type="button" title="删除所选设备" aria-label="删除所选设备"><i data-lucide="trash-2"></i></button>
+              <button class="button device-save-button" id="saveDevice" type="button"><i data-lucide="save"></i><span>保存当前设备</span></button>
+              <button class="button device-import-button" id="importDeviceJson" type="button"><i data-lucide="file-input"></i><span>从 JSON 导入</span></button>
+            </div>
+
+            <div class="field-divider"></div>
+
+            <div class="panel-heading content-heading">
+              <div>
+                <p class="panel-index">02 / CONTENT</p>
+                <h3>票面内容</h3>
+              </div>
+              <i data-lucide="layout-template" class="panel-icon"></i>
+            </div>
+
+            <div class="content-builder-head">
+              <div>
+                <label>打印内容列表</label>
+                <p class="field-help">每个条目都会对应 JSON 中的一个 text、content 或 icon 节点，按列表顺序打印；打印机不支持的 emoji、上下标和修饰字符会提示并忽略，但仍可继续打印。</p>
+              </div>
+              <div class="content-add-actions">
+                <button class="add-image-button" id="addImage" type="button"><i data-lucide="image-plus"></i><span>添加图片</span></button>
+                <button class="add-qrcode-button" id="addQrCode" type="button"><i data-lucide="scan-qr-code"></i><span>添加二维码</span></button>
+                <button class="add-table-button" id="addTable" type="button"><i data-lucide="table-2"></i><span>添加表格</span></button>
+                <button class="add-text-button" id="addText" type="button"><i data-lucide="text-cursor-input"></i><span>添加文字</span></button>
+                <button class="add-scaled-text-button" id="addScaledText" type="button"><i data-lucide="text-select"></i><span>添加放大文字</span></button>
+                <button class="add-eol-button" id="addEol" type="button"><i data-lucide="corner-down-left"></i><span>添加空行</span></button>
+              </div>
+            </div>
+            <div id="contentList" class="content-list"></div>
+
+            <div class="actions-row">
+              <button class="button secondary" id="clearForm" type="button"><i data-lucide="eraser"></i><span>清空内容</span></button>
+              <button class="button primary" id="printButton" type="button"><i data-lucide="printer"></i><span>发送打印</span></button>
+            </div>
+            <p class="form-note"><i data-lucide="shield-check"></i>设备 SN、SID、account_type 和 Telegram 配置会保存在当前浏览器，下次打开程序自动恢复。</p>
+          </section>
+
+          <section class="right-column">
+            <div class="panel preview-panel">
+              <div class="panel-heading preview-heading">
+                <div>
+                  <p class="panel-index">LIVE OUTPUT</p>
+                  <h3>小票预览</h3>
+                </div>
+                <span class="preview-size">58 mm · <strong>二值化</strong></span>
+              </div>
+                <div class="preview-stage">
+                  <div class="receipt-paper" id="receiptPaper">
+                  <div class="receipt-content" id="receiptContent"></div>
+                  </div>
+                </div>
+              <div class="preview-caption"><span class="caption-dot"></span><span>图片已用 Floyd-Steinberg 转换为纯黑/纯白；本地上传图片会在打印前自动上传图床。</span></div>
+            </div>
+
+            <div class="panel json-panel">
+              <div class="panel-heading preview-heading">
+                <div>
+                  <p class="panel-index">REQUEST BODY</p>
+                  <h3>请求 JSON</h3>
+                </div>
+                <div class="json-panel-actions"><button class="copy-button" id="copyJson" type="button"><i data-lucide="copy"></i><span>复制</span></button><button class="copy-button developer-only hidden-view" id="resetDeveloperJson" type="button"><i data-lucide="rotate-ccw"></i><span>恢复当前内容</span></button></div>
+              </div>
+              <pre id="jsonPreview" class="json-code"></pre>
+              <textarea id="jsonEditor" class="json-editor hidden-view" spellcheck="false" aria-label="开发者模式请求 JSON" aria-describedby="jsonEditorStatus"></textarea>
+              <div class="developer-json-footer developer-only hidden-view"><span id="jsonEditorStatus" class="json-editor-status" role="status" aria-live="polite">JSON 可编辑</span><button class="button primary" id="developerPrintButton" type="button"><i data-lucide="send"></i><span>校验并发送</span></button></div>
+            </div>
+
+            <div class="panel json-panel developer-only hidden-view" id="developerResponsePanel">
+              <div class="panel-heading preview-heading">
+                <div>
+                  <p class="panel-index">SERVER RESPONSE</p>
+                  <h3>服务器返回</h3>
+                </div>
+                <button class="copy-button" id="copyServerResponse" type="button"><i data-lucide="copy"></i><span>复制</span></button>
+              </div>
+              <pre id="serverResponse" class="response-code" aria-live="polite">尚未发送请求</pre>
+            </div>
+
+            <div class="notice" id="notice" role="status" aria-live="polite">
+              <div class="notice-icon"><i data-lucide="info"></i></div>
+              <div><strong>打印前检查</strong><p>请确认设备 SN、SID、account_type 已填写，并确保当前网络可以访问微信支付打印接口。</p></div>
+            </div>
+          </section>
+        </div>
+        </section>
+
+        <section class="page-view hidden-view" id="messageView" aria-hidden="true">
+          <section class="intro-row">
+            <div>
+              <p class="section-kicker">MESSAGE LISTENER</p>
+              <h2>让 Telegram 消息，<em>自动变成小票。</em></h2>
+              <p class="intro-copy">绑定 Telegram Bot 后，机器人收到私聊文字、图片或已开启的 WebP/WebM sticker 会转发到指定小票机。</p>
+            </div>
+            <div class="status-chip" data-state="idle"><span class="status-pulse" id="messageStatusPulse"></span><span id="messageStatusText">未连接</span></div>
+          </section>
+
+          <div class="message-grid">
+            <section class="panel form-panel">
+              <div class="panel-heading"><div><p class="panel-index">01 / TARGET</p><h3>接收设备（共用 device）</h3></div><i data-lucide="printer" class="panel-icon"></i></div>
+              <div class="field-group"><label for="telegramDeviceSn">设备 SN <span class="required">必填</span></label><input id="telegramDeviceSn" type="text" placeholder="例如：SN202408220001" autocomplete="off" /><p class="field-help">Telegram 消息将打印到“文本打印”中的唯一 device，任意一处修改都会同步。</p></div>
+              <div class="field-group"><label for="telegramSid">设备 SID <span class="required">必填</span></label><input id="telegramSid" type="text" placeholder="例如：wx-smart-device-sid" autocomplete="off" /></div>
+              <div class="field-group"><label for="telegramAccountType">account_type <span class="required">必填</span></label><input id="telegramAccountType" type="text" inputmode="numeric" placeholder="例如：2" autocomplete="off" required /></div>
+              <div class="device-save-row message-device-row"><select id="telegramSavedDevice" aria-label="选择已保存设备"><option value="">选择已保存设备</option></select><button class="button device-save-button" id="useSavedTelegramDevice" type="button"><i data-lucide="download"></i><span>调用已保存设备</span></button></div>
+              <div class="message-link-card"><i data-lucide="info"></i><p>设备 SN / SID / account_type 可在“文本打印”页面保存后，在这里直接调用。</p></div>
+            </section>
+
+            <section class="panel form-panel">
+              <div class="panel-heading"><div><p class="panel-index">02 / TELEGRAM</p><h3>消息监听</h3></div><span class="telegram-status" id="telegramStatus">未连接</span></div>
+              <form id="telegramForm">
+                <p class="field-help telegram-description">只处理私聊中的文字、图片和已开启的 WebP/WebM sticker；文字按“姓名：消息”打印，图片与 sticker 会在图片上方居中打印姓名，并保持比例缩放、水平居中贴底，空白区域填充白色。</p>
+                <label class="telegram-token-label" for="telegramApiBase">Telegram API 地址</label>
+                <input id="telegramApiBase" type="url" value="https://api.telegram.org" placeholder="https://api.telegram.org" autocomplete="url" spellcheck="false" />
+                <p class="field-help telegram-api-help">支持兼容 Bot API 的镜像基础地址。Token 会发送给该服务，请只使用可信镜像。</p>
+                <div class="proxy-toggle-row"><label class="switch-label" for="telegramProxyEnabled"><input id="telegramProxyEnabled" type="checkbox" /><span class="switch-ui"></span><span>通过 HTTP 代理访问 Telegram</span></label><span class="proxy-state" id="telegramProxyState">直连</span></div>
+                <div class="proxy-field hidden-proxy" id="telegramProxyField"><label class="telegram-token-label" for="telegramProxyUrl">HTTP 代理地址</label><input id="telegramProxyUrl" type="url" placeholder="例如：http://127.0.0.1:7890" autocomplete="url" spellcheck="false" /><p class="field-help">代理只用于 Telegram API，不影响微信打印。</p></div>
+                <label class="telegram-token-label" for="telegramToken">Bot Token</label>
+                <input id="telegramToken" type="password" placeholder="粘贴 BotFather 生成的 Bot Token" autocomplete="off" />
+                <div class="telegram-actions"><button class="button telegram-start" id="startTelegram" type="submit"><i data-lucide="radio"></i><span>开始监听</span></button></div>
+              </form>
+              <div class="telegram-result"><p class="panel-index">LAST EVENT</p><p class="telegram-last" id="telegramLast">未收到消息</p></div>
+            </section>
+
+            <section class="panel form-panel telegram-settings-panel">
+              <div class="panel-heading"><div><p class="panel-index">03 / RULES</p><h3>回复与限制</h3></div><i data-lucide="sliders-horizontal" class="panel-icon"></i></div>
+              <div class="field-group"><label for="telegramMaxPerMinute">单个用户每分钟最多打印任务</label><input id="telegramMaxPerMinute" type="number" min="0" max="100" value="2" inputmode="numeric" /><p class="field-help">填写 0 表示不限制；关闭的图片、sticker 和其他不支持消息不占用额度。</p></div>
+              <div class="field-group"><label for="telegramMaxCharsPerTask">单个用户一次最多打印字数</label><input id="telegramMaxCharsPerTask" type="number" min="0" max="4294967295" value="0" inputmode="numeric" /><p class="field-help">填写 0 表示不限制；只计算文字消息正文，同一批次 500ms 内的多条文字会累计计算。</p></div>
+              <div class="settings-two-column telegram-penalty-grid">
+                <div class="field-group"><label for="telegramStrikeWindowMinutes">限流统计窗口（分钟）</label><input id="telegramStrikeWindowMinutes" type="number" min="1" max="1440" value="1" inputmode="numeric" /><p class="field-help">在此时间内重复触发限流会升级封控。</p></div>
+                <div class="field-group"><label for="telegramPenalty1">第 1 次封禁分钟数</label><input id="telegramPenalty1" type="number" min="0" max="525600" value="2" inputmode="numeric" /></div>
+                <div class="field-group"><label for="telegramPenalty2">第 2 次封禁分钟数</label><input id="telegramPenalty2" type="number" min="0" max="525600" value="10" inputmode="numeric" /></div>
+                <div class="field-group"><label for="telegramPenalty3">第 3 次封禁分钟数</label><input id="telegramPenalty3" type="number" min="0" max="525600" value="1440" inputmode="numeric" /><p class="field-help">0 表示该档不临时封禁。</p></div>
+              </div>
+              <div class="proxy-toggle-row sticker-toggle-row"><label class="switch-label" for="telegramBlacklistOnThird"><input id="telegramBlacklistOnThird" type="checkbox" /><span class="switch-ui"></span><span>第三次触发后永久拉黑</span></label><span class="proxy-state">默认关闭</span></div>
+              <div class="proxy-toggle-row sticker-toggle-row"><label class="switch-label" for="telegramStickerEnabled"><input id="telegramStickerEnabled" type="checkbox" checked /><span class="switch-ui"></span><span>允许打印 WebP sticker</span></label><span class="proxy-state" id="telegramStickerState">已开启</span></div>
+              <div class="proxy-toggle-row sticker-toggle-row"><label class="switch-label" for="telegramWebmStickerEnabled"><input id="telegramWebmStickerEnabled" type="checkbox" checked /><span class="switch-ui"></span><span>允许打印 WebM sticker</span></label><span class="proxy-state" id="telegramWebmStickerState">已开启</span></div>
+              <div class="field-group compact-field"><label for="telegramWebmFrame">WebM sticker 打印帧</label><select id="telegramWebmFrame"><option value="first">第一帧</option><option value="second">第二帧</option><option value="penultimate" selected>倒数第二帧（默认）</option><option value="last">最后一帧</option></select><p class="field-help">程序会先读取 WebM 总帧数，再精确选择目标帧；只有开启 WebM 打印时生效。</p></div>
+              <div class="proxy-toggle-row sticker-toggle-row"><label class="switch-label" for="telegramPhotoEnabled"><input id="telegramPhotoEnabled" type="checkbox" checked /><span class="switch-ui"></span><span>允许打印图片消息</span></label><span class="proxy-state" id="telegramPhotoState">已开启</span></div>
+              <div class="reply-fields">
+                <div class="field-group"><label for="replyPrinting">开始打印时回复</label><input id="replyPrinting" type="text" value="正在打印，请稍候。" maxlength="500" /></div>
+                <div class="field-group"><label for="replyPrinted">打印成功时回复</label><input id="replyPrinted" type="text" value="已打印。" maxlength="500" /></div>
+                <div class="field-group"><label for="replyPrintFailed">打印失败时回复</label><input id="replyPrintFailed" type="text" value="打印失败，请稍后重试。" maxlength="500" /></div>
+                <div class="field-group"><label for="replyUnsupported">不支持的消息回复</label><input id="replyUnsupported" type="text" value="该消息类型不支持打印，请发送文字。" maxlength="500" /></div>
+                <div class="field-group"><label for="replyRateLimited">超过频率限制时回复</label><input id="replyRateLimited" type="text" value="操作太频繁，请稍后再试。" maxlength="500" /></div>
+              </div>
+            </section>
+          </div>
+          <section class="panel telegram-blacklist-panel">
+            <div class="panel-heading"><div><p class="panel-index">BLACKLIST</p><h3>黑名单管理</h3></div><i data-lucide="shield-ban" class="panel-icon"></i></div>
+            <p class="field-help telegram-blacklist-help">格式：用户名称（用户名）：封禁时间，封禁原因。临时封禁到期后会自动移除，也可以手动解除。</p>
+            <div class="telegram-blacklist-list" id="telegramBlacklistList"><div class="telegram-blacklist-empty">暂无封禁用户。</div></div>
+          </section>
+          <section class="panel telegram-log-panel">
+            <div class="panel-heading"><div><p class="panel-index">LIVE LOG</p><h3>日志输出台</h3></div><button class="copy-button" id="clearTelegramLogs" type="button"><i data-lucide="trash-2"></i><span>清空日志</span></button></div>
+            <div class="telegram-log-list" id="telegramLogList"><div class="telegram-log-empty">监听启动后，这里会显示收到的消息、过滤结果、打印状态和回复状态。</div></div>
+          </section>
+          <div class="notice message-notice"><div class="notice-icon"><i data-lucide="shield-check"></i></div><div><strong>消息过滤规则</strong><p>只打印 Telegram 私聊文字、已开启的图片和 WebP/WebM sticker。/start 等指令、群聊、频道、TGS、文件、视频、语音和其他动画会被自动跳过；WebM 会按上方选择抽取一帧；每收到一条消息都会重新等待 500ms，连续 500ms 没有新消息后再合并打印。</p></div></div>
+        </section>
+
+        <section class="page-view hidden-view" id="settingsView" aria-hidden="true">
+          <section class="intro-row">
+            <div>
+              <p class="section-kicker">APPLICATION SETTINGS</p>
+              <h2>选择图片去向，<em>统一管理图床。</em></h2>
+              <p class="intro-copy">本地图片和 Telegram sticker、图片都会使用这里选择的图床上传。</p>
+            </div>
+            <div class="status-chip"><span class="status-pulse"></span><span id="imageHostStatus">路过图床</span></div>
+          </section>
+
+          <div class="settings-grid">
+            <section class="panel form-panel settings-panel">
+              <div class="panel-heading"><div><p class="panel-index">01 / IMAGE HOST</p><h3>图床设置</h3></div><i data-lucide="cloud-upload" class="panel-icon"></i></div>
+              <form id="imageHostForm">
+                <div class="field-group"><label for="storageMode">配置存储位置</label><select id="storageMode"><option value="browser">浏览器存储</option><option value="local">本地配置文件</option></select><p class="field-help" id="storageModeStatus">当前使用浏览器存储</p></div>
+                <div class="field-group"><label for="imageHostProvider">图床服务</label><select id="imageHostProvider"><option value="imgchr">路过图床（Imgchr）</option><option value="cfbed">CloudFlare ImgBed</option></select><p class="field-help">路过图床无需额外配置；CloudFlare ImgBed 需要填写你部署的站点地址。</p></div>
+                <div id="cfBedFields" class="cfbed-fields hidden-view">
+                  <div class="field-group"><label for="cfBedBaseUrl">站点地址 <span class="required">必填</span></label><input id="cfBedBaseUrl" type="url" placeholder="例如：https://img.example.com" autocomplete="url" spellcheck="false" /><p class="field-help">填写 CloudFlare ImgBed 根地址，程序会请求该站点的 <span class="mono">/upload</span> 接口。</p></div>
+                  <div class="settings-two-column">
+                    <div class="field-group"><label for="cfBedToken">API Token</label><input id="cfBedToken" type="password" placeholder="自动删除时需 upload + delete 权限" autocomplete="off" /></div>
+                    <div class="field-group"><label for="cfBedAuthCode">上传认证码</label><input id="cfBedAuthCode" type="password" placeholder="未使用可留空" autocomplete="off" /></div>
+                  </div>
+                  <div class="field-group compact-field"><label for="cfBedUploadChannel">上传渠道</label><select id="cfBedUploadChannel"><option value="">使用站点默认渠道</option><option value="telegram">Telegram</option><option value="cfr2">Cloudflare R2</option><option value="s3">S3</option><option value="discord">Discord</option><option value="huggingface">HuggingFace</option><option value="webdav">WebDAV</option></select></div>
+                  <div class="field-group compact-field"><label for="cfBedCacheExpireDays">缓存过期天数</label><input id="cfBedCacheExpireDays" type="number" min="0" max="36500" step="1" value="7" inputmode="numeric" /><p class="field-help">仅影响 Telegram sticker 和图片的重复上传缓存；填写 0 表示永不过期，默认 7 天。设置为 0 时不会产生过期图片。</p></div>
+                  <div class="proxy-toggle-row sticker-toggle-row"><label class="switch-label" for="cfBedDeleteExpiredCache"><input id="cfBedDeleteExpiredCache" type="checkbox" /><span class="switch-ui"></span><span>自动删除过期远程图片</span></label><span class="proxy-state">每天本地 0 点检查，启动时当天未检查则补做</span></div>
+                </div>
+                <button class="button primary settings-save" id="saveImageHost" type="submit"><i data-lucide="save"></i><span>保存图床设置</span></button>
+              </form>
+            </section>
+
+            <aside class="panel form-panel settings-info-panel">
+              <div class="panel-heading"><div><p class="panel-index">02 / SECURITY</p><h3>连接说明</h3></div><i data-lucide="shield-check" class="panel-icon"></i></div>
+              <div class="settings-info-list">
+                <div><i data-lucide="key-round"></i><p><strong>按需授权</strong><span>仅上传需要 <span class="mono">upload</span>；开启自动删除还需要 <span class="mono">delete</span> 权限。</span></p></div>
+                <div><i data-lucide="hard-drive"></i><p><strong>按选择保存</strong><span>配置可保存在当前浏览器，也可以写入程序目录的 config.json；上传请求始终由本机服务发出。</span></p></div>
+                <div><i data-lucide="link"></i><p><strong>直链输出</strong><span>上传请求使用 <span class="mono">returnFormat=full</span>，优先读取响应中的 <span class="mono">publicUrl</span>。</span></p></div>
+              </div>
+              <a class="settings-doc-link" href="https://cfbed.sanyue.de/api/upload.html" target="_blank" rel="noreferrer"><i data-lucide="external-link"></i><span>查看 CloudFlare ImgBed 上传 API</span></a>
+            </aside>
+          </div>
+          <div class="notice settings-notice" id="settingsNotice" role="status" aria-live="polite"><div class="notice-icon"><i data-lucide="info"></i></div><div><strong>当前使用路过图床</strong><p>处理后的图片会上传到 Imgchr，并将返回的图片直链写入打印 JSON；相同 Telegram 媒体缓存 7 天。</p></div></div>
+        </section>
+      </main>
+
+      <footer class="footer"><span>WECHAT SMART PRINTER</span><span class="footer-line"></span><span>API / PRINTAD</span></footer>
+    </div>
+    <div class="crop-modal hidden" id="jsonImportModal" role="dialog" aria-modal="true" aria-labelledby="jsonImportModalTitle">
+      <div class="crop-dialog json-import-dialog">
+        <div class="crop-dialog-head"><div><p class="panel-index">DEVICE IMPORT</p><h3 id="jsonImportModalTitle">从 JSON 导入设备</h3></div><button class="icon-button" id="closeJsonImport" type="button" title="关闭导入窗口" aria-label="关闭导入窗口"><i data-lucide="x"></i></button></div>
+        <p class="field-help json-import-help">粘贴包含顶层 <span class="mono">device_sn</span> 和 <span class="mono">sid</span> 的 JSON，导入后会自动保存并选中该设备。</p>
+        <textarea id="jsonImportInput" class="json-import-textarea" spellcheck="false" placeholder="在此粘贴设备 JSON…" aria-label="设备 JSON"></textarea>
+        <div class="crop-actions"><button class="button secondary" id="cancelJsonImport" type="button">取消</button><button class="button primary" id="confirmJsonImport" type="button"><i data-lucide="file-input"></i><span>导入并选中</span></button></div>
+      </div>
+    </div>
+    <div class="crop-modal hidden" id="cropModal" role="dialog" aria-modal="true" aria-labelledby="cropModalTitle">
+      <div class="crop-dialog">
+        <div class="crop-dialog-head"><div><p class="panel-index">IMAGE EDITOR</p><h3 id="cropModalTitle">裁剪图片</h3></div><button class="icon-button" id="closeCropModal" type="button" title="关闭裁剪窗口" aria-label="关闭裁剪窗口"><i data-lucide="x"></i></button></div>
+        <div class="crop-workspace" id="cropWorkspace"><div class="crop-stage" id="cropStage"><canvas id="cropCanvas"></canvas><div class="crop-selection" id="cropSelection"><span class="crop-handle crop-handle-nw"></span><span class="crop-handle crop-handle-ne"></span><span class="crop-handle crop-handle-sw"></span><span class="crop-handle crop-handle-se"></span></div></div><div class="crop-result hidden" id="cropResult"><span>处理预览</span><canvas id="cropPreviewCanvas" width="280" height="280"></canvas></div></div>
+        <div class="crop-meta" id="cropMeta"><span id="cropSizeLabel">正方形裁剪</span><label class="crop-size-control">裁剪大小 <input id="cropSizeRange" type="range" min="40" max="280" value="220" /></label><span>输出：280 × 280 px · Floyd-Steinberg</span></div>
+        <div class="tone-controls hidden" id="toneControls"><label>伽马 <output id="gammaValue">1.00</output><input id="gammaRange" aria-label="伽马" type="range" min="0.40" max="2.50" step="0.05" value="1" /></label><label>对比度 <output id="contrastValue">0</output><input id="contrastRange" aria-label="对比度" type="range" min="-100" max="100" step="1" value="0" /></label></div>
+        <div class="transparency-control hidden" id="transparencyControl"><label for="transparencyMode">PNG 透明区域</label><select id="transparencyMode"><option value="white">替换为白色</option><option value="black">替换为黑色</option></select><span>打印机无法保留透明图层，请选择底色。</span></div>
+        <div class="crop-actions"><button class="button secondary" id="cancelCrop" type="button">取消</button><button class="button primary" id="applyCrop" type="button"><i data-lucide="arrow-right"></i><span>应用裁剪并继续</span></button></div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="printable-text.js"></script>
+    <script src="print-response.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

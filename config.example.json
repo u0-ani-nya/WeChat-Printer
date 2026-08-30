@@ -1,0 +1,38 @@
+{
+  "storageMode": "local",
+  "device": {
+    "sn": "YOUR_DEVICE_SN",
+    "sid": "YOUR_DEVICE_SID",
+    "accountType": 2
+  },
+  "telegram": {
+    "apiBase": "https://api.telegram.org",
+    "token": "YOUR_TELEGRAM_BOT_TOKEN",
+    "proxyEnabled": false,
+    "proxyUrl": "",
+    "maxPerMinute": 2,
+    "maxCharsPerTask": 0,
+    "rateLimitStrikeWindowMinutes": 1,
+    "rateLimitPenaltyMinutes": [
+      2,
+      10,
+      1440
+    ],
+    "rateLimitBlacklistOnThird": false,
+    "blacklist": [],
+    "stickerEnabled": true,
+    "webmStickerEnabled": true,
+    "webmStickerFrame": "penultimate",
+    "photoEnabled": true,
+    "reply_printing": "正在打印，请稍候。",
+    "reply_printed": "已打印。",
+    "reply_print_failed": "打印失败，请稍后重试。",
+    "reply_unsupported": "该消息类型不支持打印，请发送文字。",
+    "reply_rate_limited": "操作太频繁，请稍后再试。"
+  },
+  "imageHost": {
+    "provider": "imgchr",
+    "cacheExpireDays": 7,
+    "deleteExpiredCache": false
+  }
+}

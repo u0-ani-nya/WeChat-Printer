@@ -1,0 +1,5 @@
+config.json
+.sticker-cache.json
+.DS_Store
+.playwright-cli/
+output/
