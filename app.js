@@ -186,6 +186,8 @@ function applyConfig(config) {
   Object.entries(replyFields).forEach(([id, key]) => { if (Object.prototype.hasOwnProperty.call(telegram, key)) $(id).value = telegram[key]; });
   imageHostSettings = value.imageHost?.provider === 'cfbed'
     ? { ...value.imageHost, cacheExpireDays: normalizeCacheExpireDays(value.imageHost.cacheExpireDays), deleteExpiredCache: value.imageHost.deleteExpiredCache === true }
+    : value.imageHost?.provider === 'custom'
+    ? { ...value.imageHost, cacheExpireDays: normalizeCacheExpireDays(value.imageHost.cacheExpireDays) }
     : { provider: 'imgchr', cacheExpireDays: DEFAULT_CACHE_EXPIRE_DAYS, deleteExpiredCache: false };
   renderSavedDevices();
   renderImageHostSettings();
@@ -242,7 +244,16 @@ function readImageHostSettings() {
 }
 
 function imageHostFormSettings() {
-  const provider = $('imageHostProvider').value === 'cfbed' ? 'cfbed' : 'imgchr';
+  const providerValue = $('imageHostProvider').value;
+  const provider = providerValue === 'cfbed' ? 'cfbed' : providerValue === 'custom' ? 'custom' : 'imgchr';
+  if (provider === 'custom') {
+    return {
+      provider,
+      baseUrl: $('customBaseUrl').value.trim(),
+      token: $('customToken').value.trim(),
+      cacheExpireDays: normalizeCacheExpireDays($('customCacheExpireDays').value),
+    };
+  }
   return {
     provider,
     baseUrl: $('cfBedBaseUrl').value.trim(),
@@ -263,15 +274,27 @@ function renderImageHostSettings() {
   $('cfBedUploadChannel').value = settings.uploadChannel || '';
   $('cfBedCacheExpireDays').value = normalizeCacheExpireDays(settings.cacheExpireDays);
   $('cfBedDeleteExpiredCache').checked = settings.deleteExpiredCache === true;
+  $('customBaseUrl').value = settings.baseUrl || '';
+  $('customToken').value = settings.token || '';
+  $('customCacheExpireDays').value = normalizeCacheExpireDays(settings.cacheExpireDays);
   const isCfBed = settings.provider === 'cfbed';
+  const isCustom = settings.provider === 'custom';
   $('cfBedFields').classList.toggle('hidden-view', !isCfBed);
-  $('imageHostStatus').textContent = isCfBed ? 'CloudFlare ImgBed' : '路过图床';
-  $('settingsNotice').className = `notice settings-notice ${isCfBed ? 'success' : ''}`.trim();
-  $('settingsNotice').querySelector('strong').textContent = isCfBed ? '当前使用 CloudFlare ImgBed' : '当前使用路过图床';
+  $('customFields').classList.toggle('hidden-view', !isCustom);
+  const statusText = isCfBed ? 'CloudFlare ImgBed' : isCustom ? '自定义图床' : '路过图床';
+  $('imageHostStatus').textContent = statusText;
+  $('settingsNotice').className = `notice settings-notice ${isCfBed || isCustom ? 'success' : ''}`.trim();
+  $('settingsNotice').querySelector('strong').textContent = `当前使用${statusText}`;
   const cacheExpireDays = normalizeCacheExpireDays(settings.cacheExpireDays);
   const cacheText = cacheExpireDays === 0 ? '缓存永不过期' : `缓存 ${cacheExpireDays} 天后重新上传`;
   const deleteText = settings.deleteExpiredCache ? '，并每天本地 0 点（当天启动未检查时补做）自动删除过期远程文件' : '';
-  $('settingsNotice').querySelector('p').textContent = isCfBed ? `处理后的图片会上传到你配置的 CloudFlare ImgBed，并使用响应中的公开直链；${cacheText}${deleteText}。` : '处理后的图片会上传到 Imgchr，并将返回的图片直链写入打印 JSON；相同 Telegram 媒体缓存 7 天。';
+  if (isCustom) {
+    $('settingsNotice').querySelector('p').textContent = `处理后的图片会上传到你配置的自定义图床服务；${cacheText}。`;
+  } else if (isCfBed) {
+    $('settingsNotice').querySelector('p').textContent = `处理后的图片会上传到你配置的 CloudFlare ImgBed，并使用响应中的公开直链；${cacheText}${deleteText}。`;
+  } else {
+    $('settingsNotice').querySelector('p').textContent = '处理后的图片会上传到 Imgchr，并将返回的图片直链写入打印 JSON；相同 Telegram 媒体缓存 7 天。';
+  }
 }
 
 function setSettingsNotice(type, title, message) {
@@ -318,6 +341,16 @@ async function saveImageHostSettings(event) {
     $('cfBedBaseUrl').focus();
     return;
   }
+  if (settings.provider === 'custom' && !settings.baseUrl) {
+    setNotice('error', '无法保存图床设置', '请填写自定义图床服务器地址。');
+    $('customBaseUrl').focus();
+    return;
+  }
+  if (settings.provider === 'custom' && !settings.token) {
+    setNotice('error', '无法保存图床设置', '请填写自定义图床上传密钥。');
+    $('customToken').focus();
+    return;
+  }
   const button = $('saveImageHost');
   button.disabled = true;
   try {
@@ -342,9 +375,11 @@ async function saveImageHostSettings(event) {
     if (syncResult.disabled) return;
     const cacheText = settings.provider === 'cfbed'
       ? (settings.cacheExpireDays === 0 ? '缓存永不过期' : `缓存 ${settings.cacheExpireDays} 天后重新上传`)
+      : settings.provider === 'custom'
+      ? (settings.cacheExpireDays === 0 ? '缓存永不过期' : `缓存 ${settings.cacheExpireDays} 天后重新上传`)
       : '缓存 7 天后重新上传';
     const deleteText = settings.deleteExpiredCache ? '，并每天本地 0 点（当天启动未检查时补做）自动删除过期远程图片' : '';
-    const providerText = settings.provider === 'cfbed' ? 'CloudFlare ImgBed' : '路过图床';
+    const providerText = settings.provider === 'cfbed' ? 'CloudFlare ImgBed' : settings.provider === 'custom' ? '自定义图床' : '路过图床';
     setSettingsNotice('success', '图床设置已保存', `后续图片和 Telegram sticker 将上传到${providerText}，${cacheText}${deleteText}。`);
     setNotice('success', '图床设置已保存', `后续图片和 Telegram sticker 将上传到${providerText}，${cacheText}${deleteText}。`);
   } catch (error) {
@@ -1183,15 +1218,17 @@ function applyFloydSteinberg(canvas, gamma = 1, contrast = 0, alphaBackground = 
 function createProcessedCropCanvas() {
   if (!cropState) return null;
   const { image, crop, offsetX, offsetY, displayWidth, gamma, contrast, alphaBackground } = cropState;
-  const output = document.createElement('canvas');
-  output.width = MAX_IMAGE_SIZE;
-  output.height = MAX_IMAGE_SIZE;
-  const context = output.getContext('2d', { willReadFrequently: true });
-  context.clearRect(0, 0, MAX_IMAGE_SIZE, MAX_IMAGE_SIZE);
   const sourceX = (crop.x - offsetX) / displayWidth * image.width;
   const sourceY = (crop.y - offsetY) / cropState.displayHeight * image.height;
   const sourceSize = crop.size / displayWidth * image.width;
-  context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, MAX_IMAGE_SIZE, MAX_IMAGE_SIZE);
+  const outputWidth = MAX_IMAGE_SIZE;
+  const outputHeight = MAX_IMAGE_SIZE;
+  const output = document.createElement('canvas');
+  output.width = outputWidth;
+  output.height = outputHeight;
+  const context = output.getContext('2d', { willReadFrequently: true });
+  context.clearRect(0, 0, outputWidth, outputHeight);
+  context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, outputWidth, outputHeight);
   applyFloydSteinberg(output, gamma, contrast, alphaBackground);
   return output;
 }
@@ -1762,8 +1799,9 @@ $('jsonEditor').addEventListener('input', () => {
 
 renderSavedDevices();
 $('imageHostProvider').addEventListener('change', () => {
-  const isCfBed = $('imageHostProvider').value === 'cfbed';
-  $('cfBedFields').classList.toggle('hidden-view', !isCfBed);
+  const provider = $('imageHostProvider').value;
+  $('cfBedFields').classList.toggle('hidden-view', provider !== 'cfbed');
+  $('customFields').classList.toggle('hidden-view', provider !== 'custom');
 });
 $('storageMode').addEventListener('change', (event) => {
   const nextMode = event.target.value === 'local' ? 'local' : 'browser';

@@ -244,7 +244,12 @@
               <div class="panel-heading"><div><p class="panel-index">01 / IMAGE HOST</p><h3>图床设置</h3></div><i data-lucide="cloud-upload" class="panel-icon"></i></div>
               <form id="imageHostForm">
                 <div class="field-group"><label for="storageMode">配置存储位置</label><select id="storageMode"><option value="browser">浏览器存储</option><option value="local">本地配置文件</option></select><p class="field-help" id="storageModeStatus">当前使用浏览器存储</p></div>
-                <div class="field-group"><label for="imageHostProvider">图床服务</label><select id="imageHostProvider"><option value="imgchr">路过图床（Imgchr）</option><option value="cfbed">CloudFlare ImgBed</option></select><p class="field-help">路过图床无需额外配置；CloudFlare ImgBed 需要填写你部署的站点地址。</p></div>
+                <div class="field-group"><label for="imageHostProvider">图床服务</label><select id="imageHostProvider"><option value="imgchr">路过图床（Imgchr）</option><option value="cfbed">CloudFlare ImgBed</option><option value="custom">自定义图床</option></select><p class="field-help">路过图床无需额外配置；CloudFlare ImgBed 需要填写你部署的站点地址；自定义图床需要填写服务器地址和密钥。</p></div>
+                <div id="customFields" class="custom-fields hidden-view">
+                  <div class="field-group"><label for="customBaseUrl">服务器地址 <span class="required">必填</span></label><input id="customBaseUrl" type="url" placeholder="例如：https://img.example.com:3900" autocomplete="url" spellcheck="false" /><p class="field-help">填写自定义图床服务的根地址，程序会请求该地址的 <span class="mono">/upload</span> 接口。</p></div>
+                  <div class="field-group"><label for="customToken">上传密钥 <span class="required">必填</span></label><input id="customToken" type="password" placeholder="在图床管理页面生成的 UUID 密钥" autocomplete="off" /><p class="field-help">在自定义图床的管理页面生成密钥后填入。</p></div>
+                  <div class="field-group compact-field"><label for="customCacheExpireDays">缓存过期天数</label><input id="customCacheExpireDays" type="number" min="0" max="36500" step="1" value="7" inputmode="numeric" /><p class="field-help">仅影响 Telegram sticker 和图片的重复上传缓存；填写 0 表示永不过期，默认 7 天。</p></div>
+                </div>
                 <div id="cfBedFields" class="cfbed-fields hidden-view">
                   <div class="field-group"><label for="cfBedBaseUrl">站点地址 <span class="required">必填</span></label><input id="cfBedBaseUrl" type="url" placeholder="例如：https://img.example.com" autocomplete="url" spellcheck="false" /><p class="field-help">填写 CloudFlare ImgBed 根地址，程序会请求该站点的 <span class="mono">/upload</span> 接口。</p></div>
                   <div class="settings-two-column">

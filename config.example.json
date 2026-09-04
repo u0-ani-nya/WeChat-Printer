@@ -34,5 +34,11 @@
     "provider": "imgchr",
     "cacheExpireDays": 7,
     "deleteExpiredCache": false
+  },
+  "imageHostCustom": {
+    "provider": "custom",
+    "baseUrl": "https://img.example.com:3900",
+    "token": "YOUR_UUID_KEY",
+    "cacheExpireDays": 7
   }
 }

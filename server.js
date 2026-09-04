@@ -18,6 +18,7 @@ const DEFAULT_IMAGE_HOST = 'imgchr';
 const FFMPEG_COMMAND = process.env.WECHAT_PRINTER_FFMPEG || 'ffmpeg';
 const FFPROBE_COMMAND = process.env.WECHAT_PRINTER_FFPROBE || 'ffprobe';
 const STICKER_SIZE = 280;
+const MAX_IMAGE_STRIPS = 10;
 const DEFAULT_CACHE_EXPIRE_DAYS = 7;
 const MAX_CACHE_EXPIRE_DAYS = 36500;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -568,9 +569,24 @@ function normalizeCacheExpireDays(value) {
   return Number.isFinite(days) ? Math.max(0, Math.min(MAX_CACHE_EXPIRE_DAYS, Math.floor(days))) : DEFAULT_CACHE_EXPIRE_DAYS;
 }
 
+function normalizeCustomImageHostBase(value) {
+  const target = new URL(String(value || '').trim());
+  if (!['http:', 'https:'].includes(target.protocol)) throw new Error('自定义图床地址只支持 HTTP 或 HTTPS');
+  if (target.username || target.password) throw new Error('自定义图床地址不能包含用户名或密码');
+  if (target.search || target.hash) throw new Error('自定义图床地址不能包含查询参数或锚点');
+  target.pathname = target.pathname.replace(/\/+$/, '');
+  return target.toString().replace(/\/$/, '');
+}
+
 function imageHostConfig(value = {}) {
-  const provider = value.provider === 'cfbed' ? 'cfbed' : DEFAULT_IMAGE_HOST;
+  const provider = value.provider === 'cfbed' ? 'cfbed' : value.provider === 'custom' ? 'custom' : DEFAULT_IMAGE_HOST;
   if (provider === DEFAULT_IMAGE_HOST) return { provider, cacheExpireDays: DEFAULT_CACHE_EXPIRE_DAYS, deleteExpiredCache: false };
+  if (provider === 'custom') {
+    const baseUrl = normalizeCustomImageHostBase(value.baseUrl);
+    const token = String(value.token || '').trim();
+    if (!token) throw new Error('自定义图床密钥不能为空');
+    return { provider, baseUrl, token, cacheExpireDays: normalizeCacheExpireDays(value.cacheExpireDays), deleteExpiredCache: false };
+  }
   const baseUrl = normalizeImageHostBase(value.baseUrl);
   const token = String(value.token || '').trim();
   const authCode = String(value.authCode || '').trim();
@@ -619,9 +635,41 @@ async function uploadToCfBed(dataUrl, config) {
   return { directUrl, pageUrl: directUrl, remotePath: cacheRemotePath(item?.src || directUrl) };
 }
 
+async function uploadToCustom(dataUrl, config) {
+  const match = String(dataUrl || '').match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,([a-z0-9+/=]+)$/i);
+  if (!match) throw new Error('只支持 PNG、JPEG 或 WebP 图片');
+  const mime = match[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : match[1].toLowerCase();
+  const extension = mime === 'image/jpeg' ? 'jpg' : mime.split('/')[1];
+  const imageData = Buffer.from(match[2], 'base64');
+  if (!imageData.length || imageData.length > 10 * 1024 * 1024) throw new Error('图片大小必须在 10MB 以内');
+
+  const boundary = `----WeChatPrinterCustom${Date.now().toString(16)}`;
+  const parts = [];
+  appendMultipartFile(parts, boundary, 'file', `receipt.${extension}`, mime, imageData);
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+  const body = Buffer.concat(parts);
+  const headers = {
+    Accept: 'application/json',
+    'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    'Content-Length': body.length,
+    'User-Agent': 'WeChatPrinter/1.0',
+    Authorization: `Bearer ${config.token}`,
+  };
+  const uploaded = await requestBuffer(new URL('/upload', `${config.baseUrl}/`), { method: 'POST', headers }, body);
+  let result;
+  try { result = JSON.parse(uploaded.body.toString('utf8')); } catch { throw new Error('自定义图床返回了无法解析的响应'); }
+  const directUrl = result?.directUrl || result?.url || result?.src;
+  if (uploaded.statusCode < 200 || uploaded.statusCode >= 300 || !directUrl) {
+    throw new Error(result?.error || `自定义图床上传失败（HTTP ${uploaded.statusCode}）`);
+  }
+  return { directUrl, pageUrl: result?.pageUrl || '' };
+}
+
 async function uploadHostedImage(dataUrl, config = {}) {
   const settings = imageHostConfig(config);
-  return settings.provider === 'cfbed' ? uploadToCfBed(dataUrl, settings) : uploadToImgchr(dataUrl);
+  if (settings.provider === 'cfbed') return uploadToCfBed(dataUrl, settings);
+  if (settings.provider === 'custom') return uploadToCustom(dataUrl, settings);
+  return uploadToImgchr(dataUrl);
 }
 
 async function imageHostUpload(req, res) {
@@ -1064,12 +1112,28 @@ function applyFloydSteinberg(buffer, width, height) {
 }
 
 async function renderTelegramImage(input, filterPrefix, errorLabel) {
-  const imageFilter = `${filterPrefix || ''}scale=${STICKER_SIZE}:${STICKER_SIZE}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${STICKER_SIZE}:${STICKER_SIZE}:(ow-iw)/2:oh-ih:color=white,setsar=1`;
+  const imageFilter = `${filterPrefix || ''}scale=${STICKER_SIZE}:-2:flags=lanczos,setsar=1`;
   const rgba = await runFfmpeg(['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vf', imageFilter, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1'], input, errorLabel);
-  const expectedLength = STICKER_SIZE * STICKER_SIZE * 4;
-  if (rgba.length < expectedLength) throw new Error('Telegram 图片处理结果不完整');
-  const binarized = applyFloydSteinberg(Buffer.from(rgba.subarray(0, expectedLength)), STICKER_SIZE, STICKER_SIZE);
-  return runFfmpeg(['-hide_banner', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${STICKER_SIZE}x${STICKER_SIZE}`, '-i', 'pipe:0', '-frames:v', '1', '-f', 'image2', '-vcodec', 'mjpeg', '-q:v', '2', 'pipe:1'], binarized, 'Telegram 图片 JPEG 编码失败');
+  const rawBytes = STICKER_SIZE * 4;
+  if (rgba.length < rawBytes) throw new Error('Telegram 图片处理结果不完整');
+  const actualHeight = Math.floor(rgba.length / (STICKER_SIZE * 4));
+  if (actualHeight < 1) throw new Error('Telegram 图片处理结果不完整');
+  const fullBinarized = applyFloydSteinberg(Buffer.from(rgba.subarray(0, STICKER_SIZE * actualHeight * 4)), STICKER_SIZE, actualHeight);
+  const strips = [];
+  const stripCount = Math.max(1, Math.ceil(actualHeight / STICKER_SIZE));
+  for (let i = 0; i < stripCount && i < MAX_IMAGE_STRIPS; i++) {
+    const yStart = i * STICKER_SIZE;
+    const stripHeight = Math.min(STICKER_SIZE, actualHeight - yStart);
+    const stripBuf = Buffer.alloc(STICKER_SIZE * STICKER_SIZE * 4, 255);
+    for (let row = 0; row < stripHeight; row++) {
+      const srcOffset = ((yStart + row) * STICKER_SIZE) * 4;
+      const dstOffset = row * STICKER_SIZE * 4;
+      fullBinarized.copy(stripBuf, dstOffset, srcOffset, srcOffset + STICKER_SIZE * 4);
+    }
+    const jpg = await runFfmpeg(['-hide_banner', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${STICKER_SIZE}x${STICKER_SIZE}`, '-i', 'pipe:0', '-frames:v', '1', '-f', 'image2', '-vcodec', 'mjpeg', '-q:v', '2', 'pipe:1'], stripBuf, 'Telegram 图片 JPEG 编码失败');
+    strips.push(jpg);
+  }
+  return strips;
 }
 
 async function processTelegramSticker(sticker, options = {}) {
@@ -1101,11 +1165,16 @@ async function processTelegramSticker(sticker, options = {}) {
     frameIndex = selectedStickerFrameIndex(frameCount, options.webmFrame || 'penultimate');
   }
   const frameFilter = extension === 'webm' ? `select=eq(n\\,${frameIndex}),` : '';
-  const jpg = await renderTelegramImage(input, frameFilter, `${extension.toUpperCase()} sticker 解码失败`);
-  const dataUrl = `data:image/jpeg;base64,${jpg.toString('base64')}`;
-  const hosted = await uploadHostedImage(dataUrl, telegramState.imageHost);
-  cacheMedia(cacheKey, hosted, telegramState.imageHost);
-  return { directUrl: hosted.directUrl, pageUrl: hosted.pageUrl };
+  const strips = await renderTelegramImage(input, frameFilter, `${extension.toUpperCase()} sticker 解码失败`);
+  const uploadedStrips = [];
+  for (const jpg of strips) {
+    const dataUrl = `data:image/jpeg;base64,${jpg.toString('base64')}`;
+    const hosted = await uploadHostedImage(dataUrl, telegramState.imageHost);
+    uploadedStrips.push(hosted.directUrl);
+  }
+  const result = { directUrl: uploadedStrips[0], pageUrl: '', stripUrls: uploadedStrips };
+  cacheMedia(cacheKey, result, telegramState.imageHost);
+  return result;
 }
 
 async function processTelegramPhoto(photo) {
@@ -1118,11 +1187,16 @@ async function processTelegramPhoto(photo) {
   const filePath = String(file?.file_path || '');
   if (!filePath) throw new Error('Telegram 图片缺少文件路径');
   const input = await downloadTelegramBuffer(telegramFileUrl(filePath), telegramState.proxyUrl);
-  const jpg = await renderTelegramImage(input, '', 'Telegram 图片解码失败');
-  const dataUrl = `data:image/jpeg;base64,${jpg.toString('base64')}`;
-  const hosted = await uploadHostedImage(dataUrl, telegramState.imageHost);
-  cacheMedia(cacheKey, hosted, telegramState.imageHost);
-  return { directUrl: hosted.directUrl, pageUrl: hosted.pageUrl };
+  const strips = await renderTelegramImage(input, '', 'Telegram 图片解码失败');
+  const uploadedStrips = [];
+  for (const jpg of strips) {
+    const dataUrl = `data:image/jpeg;base64,${jpg.toString('base64')}`;
+    const hosted = await uploadHostedImage(dataUrl, telegramState.imageHost);
+    uploadedStrips.push(hosted.directUrl);
+  }
+  const result = { directUrl: uploadedStrips[0], pageUrl: '', stripUrls: uploadedStrips };
+  cacheMedia(cacheKey, result, telegramState.imageHost);
+  return result;
 }
 
 function telegramSenderName(user) {
@@ -1329,10 +1403,11 @@ function telegramPrintingReply(item) {
 
 function telegramPayload(items) {
   const values = Array.isArray(items) ? items : [items];
+  const separatorNodes = values.length > 1 ? telegramTextNodes('-----------') : [];
   const root = telegramPrintNodes(values.map((item) => ({
     ...item,
     nodes: item.nodes || telegramTextNodes(item.printText),
-  })), telegramTextNodes('-----------'));
+  })), separatorNodes);
   return {
     device_sn: telegramState.deviceSn,
     ad_content: { user_define_template: { root } },
@@ -1463,14 +1538,14 @@ async function telegramLoop(generation) {
               await telegramReply(message.chat?.id, telegramState.replyRateLimited, generation);
               continue;
             }
+            const imageNodes = (stickerResult.stripUrls || [stickerResult.directUrl]).map(
+              (url) => ({ icon: { value: url, style: { justification: 1 }, type: 3 } })
+            );
             enqueuePrintMessage({
               userId,
               chatId: message.chat?.id,
               printText: `${sender}：sticker`,
-              nodes: [
-                ...telegramTextNodes(sender),
-                { icon: { value: stickerResult.directUrl, style: { justification: 1 }, type: 3 } },
-              ],
+              nodes: [...telegramTextNodes(sender), ...imageNodes],
             }, generation);
           } catch (error) {
             const detail = error.message || 'sticker 处理失败';
@@ -1507,7 +1582,9 @@ async function telegramLoop(generation) {
               await telegramReply(message.chat?.id, telegramState.replyRateLimited, generation);
               continue;
             }
-            const imageNode = { icon: { value: photoResult.directUrl, style: { justification: 1 }, type: 3 } };
+            const imageNodes = (photoResult.stripUrls || [photoResult.directUrl]).map(
+              (url) => ({ icon: { value: url, style: { justification: 1 }, type: 3 } })
+            );
             const captionNodes = printableCaption
               ? telegramMessageNodes('', caption, message.caption_entities, captionCharacters.length > 0)
               : [];
@@ -1518,8 +1595,8 @@ async function telegramLoop(generation) {
               printText: `${sender}：图片${printableCaption ? ` ${printableCaption}` : ''}`,
               textLength: captionLength,
               unsupportedCharacters: captionCharacters,
-              nodes: [...telegramTextNodes(sender), imageNode, ...captionNodes],
-              continuationNodes: [imageNode, ...captionNodes],
+              nodes: [...telegramTextNodes(sender), ...imageNodes, ...captionNodes],
+              continuationNodes: [...imageNodes, ...captionNodes],
             }, generation);
             photoEnqueued = true;
           } catch (error) {
