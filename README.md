@@ -89,7 +89,7 @@ cp config.example.json config.json
 
 **CloudFlare ImgBed**：需填写根地址，可选配置 API Token、上传认证码、上传渠道、缓存天数、自动删除过期图片（需 Token 具备 `upload`+`delete` 权限）。
 
-**自定义图床**：需填写服务器地址和 UUID 密钥。项目附带了一个轻量图床服务端（`image-host-server/`），可部署在自己的服务器上供朋友使用。详见 [image-host-server/README.md](image-host-server/README.md)。
+**自定义图床**：需填写服务器地址和 UUID 密钥。项目附带了一个轻量图床服务端（`image-host-server/`，PHP + Nginx），可部署在自己的服务器上供朋友使用。详见 [image-host-server/README.md](image-host-server/README.md)。
 
 ## 图片打印
 

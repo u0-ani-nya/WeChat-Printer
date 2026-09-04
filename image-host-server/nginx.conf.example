@@ -1,0 +1,32 @@
+server {
+    listen 80;
+    server_name img.example.com;  # 改成你的域名
+
+    client_max_body_size 10M;
+
+    root /path/to/image-host-server;  # 改成实际路径
+    index index.php;
+
+    # 图片直接返回（不走 PHP）
+    location /images/ {
+        alias /path/to/image-host-server/data/uploads/;  # 改成实际路径
+        expires 365d;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # 所有其他请求走 PHP
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/run/php/php-fpm.sock;  # 根据实际 PHP-FPM 配置修改
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    # 禁止访问配置文件和数据目录
+    location ~ /config\.php$ { deny all; }
+    location ~ /data/ { deny all; }
+}
